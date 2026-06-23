@@ -44,47 +44,99 @@ bool inBounds(int r, int c) {
     return (r >= 0 && r < boardSize && c >= 0 && c < boardSize);
 }
 
+bool isRookPathClear(int fromR, int fromC, int toR, int toC) {
+    if (fromR != toR && fromC != toC) return false;
+    
+    int stepR = (toR > fromR) ? 1 : (toR < fromR ? -1 : 0);
+    int stepC = (toC > fromC) ? 1 : (toC < fromC ? -1 : 0);
+    
+    int currR = fromR + stepR;
+    int currC = fromC + stepC;
+    
+    while (currR != toR || currC != toC) {
+        if (board[currR][currC] != ' ') return false;
+        currR += stepR;
+        currC += stepC;
+    }
+    return true;
+}
+
+bool isSquareAttackedByPlayer(int r, int c) {
+    if (abs(r - playerKing.r) <= 1 && abs(c - playerKing.c) <= 1) return true;
+    if (rook1Alive && isRookPathClear(rook1.r, rook1.c, r, c)) return true;
+    if (rook2Alive && isRookPathClear(rook2.r, rook2.c, r, c)) return true;
+    return false;
+}
+
 void generatePositions() {
-    clearBoard();
-    compKing.r = rand() % boardSize;
-    compKing.c = rand() % boardSize;
-    board[compKing.r][compKing.c] = 'k';
-
     do {
-        playerKing.r = rand() % boardSize;
-        playerKing.c = rand() % boardSize;
-    } while (board[playerKing.r][playerKing.c] != ' ' || 
-             (abs(playerKing.r - compKing.r) <= 1 && abs(playerKing.c - compKing.c) <= 1));
-    board[playerKing.r][playerKing.c] = 'K';
+        clearBoard();
+        compKing.r = rand() % boardSize;
+        compKing.c = rand() % boardSize;
+        board[compKing.r][compKing.c] = 'k';
 
-    do {
-        rook1.r = rand() % boardSize;
-        rook1.c = rand() % boardSize;
-    } while (board[rook1.r][rook1.c] != ' ');
-    board[rook1.r][rook1.c] = 'R';
+        do {
+            playerKing.r = rand() % boardSize;
+            playerKing.c = rand() % boardSize;
+        } while (board[playerKing.r][playerKing.c] != ' ' || 
+                 (abs(playerKing.r - compKing.r) <= 1 && abs(playerKing.c - compKing.c) <= 1));
+        board[playerKing.r][playerKing.c] = 'K';
 
-    do {
-        rook2.r = rand() % boardSize;
-        rook2.c = rand() % boardSize;
-    } while (board[rook2.r][rook2.c] != ' ');
-    board[rook2.r][rook2.c] = 'W';
+        do {
+            rook1.r = rand() % boardSize;
+            rook1.c = rand() % boardSize;
+        } while (board[rook1.r][rook1.c] != ' ');
+        board[rook1.r][rook1.c] = 'R';
+        rook1Alive = true;
+
+        do {
+            rook2.r = rand() % boardSize;
+            rook2.c = rand() % boardSize;
+        } while (board[rook2.r][rook2.c] != ' ');
+        board[rook2.r][rook2.c] = 'W';
+        rook2Alive = true;
+    } while (isSquareAttackedByPlayer(compKing.r, compKing.c));
 }
 
 bool computerMakeMove() {
     int dr[] = {-1, -1, -1,  0, 0,  1, 1, 1};
     int dc[] = {-1,  0,  1, -1, 1, -1, 0,  1};
+    Pos validMoves[8];
+    bool isCaptureMove[8];
+    int count = 0;
 
     for (int i = 0; i < 8; i++) {
         int nr = compKing.r + dr[i];
         int nc = compKing.c + dc[i];
+        if (inBounds(nr, nc)) {
+            if (board[nr][nc] == ' ' || board[nr][nc] == 'R' || board[nr][nc] == 'W') {
+                char backup = board[nr][nc];
+                Pos oldPos = compKing;
+                bool oldRook1Alive = rook1Alive; bool oldRook2Alive = rook2Alive;
+                if (backup == 'R') rook1Alive = false;
+                if (backup == 'W') rook2Alive = false;
 
-        if (inBounds(nr, nc) && board[nr][nc] == ' ') {
-            board[compKing.r][compKing.c] = ' ';
-            compKing.r = nr;
-            compKing.c = nc;
-            board[compKing.r][compKing.c] = 'k';
-            return true;
+                board[compKing.r][compKing.c] = ' '; board[nr][nc] = 'k';
+                compKing.r = nr; compKing.c = nc;
+
+                if (!isSquareAttackedByPlayer(nr, nc) && !(abs(nr - playerKing.r) <= 1 && abs(nc - playerKing.c) <= 1)) {
+                    validMoves[count] = compKing;
+                    isCaptureMove[count] = (backup == 'R' || backup == 'W');
+                    count++;
+                }
+                board[oldPos.r][oldPos.c] = 'k'; board[nr][nc] = backup; compKing = oldPos;
+                rook1Alive = oldRook1Alive; rook2Alive = oldRook2Alive;
+            }
         }
+    }
+    if (count > 0) {
+        int chosenIndex = 0;
+        for (int i = 0; i < count; i++) { if (isCaptureMove[i]) { chosenIndex = i; break; } }
+        Pos nextPos = validMoves[chosenIndex];
+        if (board[nextPos.r][nextPos.c] == 'R') rook1Alive = false;
+        if (board[nextPos.r][nextPos.c] == 'W') rook2Alive = false;
+        board[compKing.r][compKing.c] = ' '; compKing = nextPos; board[compKing.r][compKing.c] = 'k';
+        return true; 
     }
     return false;
 }
@@ -92,48 +144,48 @@ bool computerMakeMove() {
 void startNewGame() {
     generatePositions();
     printf("\n--- ИГРАТА ЗАПОЧНА ---\n");
-
     while (1) {
         printBoard();
+        if (isSquareAttackedByPlayer(compKing.r, compKing.c)) printf("\n[ВНИМАНИЕ] Компютърът е в ШАХ!\n");
 
         printf("\nВъведете вашия ход (например: A2 A4): ");
-        char col1, col2; 
-        int row1, row2;
-        
+        char col1, col2; int row1, row2;
         if (scanf(" %c%d %c%d", &col1, &row1, &col2, &row2) != 4) {
-            printf("Грешка: Невалиден формат на въвеждане!\n");
-            while (getchar() != '\n'); 
-            continue;
+            printf("Грешка: Невалиден формат!\n"); while (getchar() != '\n'); continue;
         }
+        int fromC = col1 - (col1 >= 'a' ? 'a' : 'A'); int fromR = boardSize - row1;
+        int toC = col2 - (col2 >= 'a' ? 'a' : 'A'); int toR = boardSize - row2;
 
-        int fromC = col1 - (col1 >= 'a' ? 'a' : 'A'); 
-        int fromR = boardSize - row1;
-        int toC = col2 - (col2 >= 'a' ? 'a' : 'A'); 
-        int toR = boardSize - row2;
-
-        if (!inBounds(fromR, fromC) || !inBounds(toR, toC)) {
-            printf("Грешка: Избраните полета са извън дъската!\n");
-            continue;
-        }
-
+        if (!inBounds(fromR, fromC) || !inBounds(toR, toC)) { printf("Грешка: Извън дъската!\n"); continue; }
         char piece = board[fromR][fromC];
-        if (piece != 'K' && piece != 'R' && piece != 'W') {
-            printf("Грешка: На началното поле няма ваша фигура!\n");
-            continue;
+        if (piece != 'K' && piece != 'R' && piece != 'W') { printf("Грешка: Няма ваша фигура там!\n"); continue; }
+        if (board[toR][toC] == 'K' || board[toR][toC] == 'R' || board[toR][toC] == 'W') { printf("Грешка: Не може върху своя фигура!\n"); continue; }
+
+        bool validMove = false;
+        if (piece == 'K') { 
+            if (abs(toR - fromR) <= 1 && abs(toC - fromC) <= 1) {
+                if (abs(toR - compKing.r) > 1 || abs(toC - compKing.c) > 1) validMove = true;
+                else printf("Грешка: Царете не могат да бъдат един до друг!\n");
+            }
+        } else { 
+            if (isRookPathClear(fromR, fromC, toR, toC)) validMove = true; 
         }
 
-        board[fromR][fromC] = ' ';
-        board[toR][toC] = piece;
+        if (!validMove) { printf("Грешка: Невалиден шахматен ход!\n"); continue; }
 
+        board[fromR][fromC] = ' '; board[toR][toC] = piece;
         if (piece == 'K') { playerKing.r = toR; playerKing.c = toC; }
         if (piece == 'R') { rook1.r = toR; rook1.c = toC; }
         if (piece == 'W') { rook2.r = toR; rook2.c = toC; }
 
         bool compMoved = computerMakeMove();
+        if (!rook1Alive && !rook2Alive) { printBoard(); printf("\nРАВЕНСТВО: Нямате достатъчно фигури за мат!\n"); break; }
         
         if (!compMoved) {
-            printf("\nКомпютърът няма валидни ходове! Край на играта.\n");
-            break;
+            printBoard();
+            if (isSquareAttackedByPlayer(compKing.r, compKing.c)) printf("\nПОБЕДА! ШАХ И МАТ!\n");
+            else printf("\nПАТ! Равенство.\n");
+            break; 
         }
     }
 }
