@@ -16,6 +16,21 @@ int boardSize = 8;
 Pos playerKing, rook1, rook2, compKing;
 bool rook1Alive = true, rook2Alive = true;
 
+typedef struct {
+    char piece;
+    int fromR, fromC, toR, toC;
+    bool gaveCheck;
+} Move;
+
+typedef struct {
+    Move* moves;
+    int count, capacity;
+    unsigned int seed;
+    int boardSize;
+} GameLog;
+
+GameLog gameLog;
+
 void clearBoard() {
     for (int i = 0; i < boardSize; i++)
         for (int j = 0; j < boardSize; j++)
@@ -141,8 +156,35 @@ bool computerMakeMove() {
     return false;
 }
 
+void initLog(unsigned int seed) {
+    gameLog.seed = seed;
+    gameLog.boardSize = boardSize;
+    gameLog.count = 0;
+    gameLog.capacity = 16;
+    gameLog.moves = malloc(gameLog.capacity * sizeof(Move));
+}
+
+void logMove(char piece, int fromR, int fromC, int toR, int toC, bool gaveCheck) {
+    if (gameLog.count == gameLog.capacity) {
+        gameLog.capacity *= 2;
+        gameLog.moves = realloc(gameLog.moves, gameLog.capacity * sizeof(Move));
+    }
+    Move m = { piece, fromR, fromC, toR, toC, gaveCheck };
+    gameLog.moves[gameLog.count++] = m;
+}
+
+void freeLog() {
+    free(gameLog.moves);
+    gameLog.moves = NULL;
+    gameLog.count = 0;
+    gameLog.capacity = 0;
+}
+
 void startNewGame() {
+    unsigned int seed = (unsigned int)time(NULL);
+    srand(seed);
     generatePositions();
+    initLog(seed);
     printf("\n--- ИГРАТА ЗАПОЧНА ---\n");
     while (1) {
         printBoard();
@@ -178,14 +220,20 @@ void startNewGame() {
         if (piece == 'R') { rook1.r = toR; rook1.c = toC; }
         if (piece == 'W') { rook2.r = toR; rook2.c = toC; }
 
+        bool gaveCheck = isSquareAttackedByPlayer(compKing.r, compKing.c);
+        logMove(piece, fromR, fromC, toR, toC, gaveCheck);
+
+        Pos compBefore = compKing;
         bool compMoved = computerMakeMove();
-        if (!rook1Alive && !rook2Alive) { printBoard(); printf("\nРАВЕНСТВО: Нямате достатъчно фигури за мат!\n"); break; }
-        
+        if (compMoved) logMove('k', compBefore.r, compBefore.c, compKing.r, compKing.c, false);
+
+        if (!rook1Alive && !rook2Alive) { printBoard(); printf("\nРАВЕНСТВО: Нямате достатъчно фигури за мат!\n"); freeLog(); break; }
+
         if (!compMoved) {
             printBoard();
             if (isSquareAttackedByPlayer(compKing.r, compKing.c)) printf("\nПОБЕДА! ШАХ И МАТ!\n");
             else printf("\nПАТ! Равенство.\n");
-            break; 
+            freeLog(); break;
         }
     }
 }
@@ -200,7 +248,6 @@ void changeBoardSize() {
 }
 
 int main() {
-    srand(time(NULL));
     int choice;
     while (1) {
         printf("\n=== МЕНЮ ===\n1. Нова игра\n2. Размер дъска (Сега: %dx%d)\n3. Replay\n4. Изход\nИзбор: ", boardSize, boardSize);
