@@ -227,6 +227,27 @@ void saveGame(GameLog* log, const char* filename) {
     fclose(f);
 }
 
+bool loadGame(GameLog* log, const char* filename) {
+    FILE* f = fopen(filename, "r");
+    if (!f) { printf("Грешка: Не може да се отвори %s!\n", filename); return false; }
+    unsigned int seed; int bSize, count;
+    if (fscanf(f, "%u %d %d", &seed, &bSize, &count) != 3) { fclose(f); printf("Грешка: Повреден файл!\n"); return false; }
+    log->seed = seed;
+    log->boardSize = bSize;
+    log->count = 0;
+    log->capacity = count > 0 ? count : 1;
+    log->moves = malloc(log->capacity * sizeof(Move));
+    for (int i = 0; i < count; i++) {
+        char piece; int fromR, fromC, toR, toC, check;
+        if (fscanf(f, " %c %d %d %d %d %d", &piece, &fromR, &fromC, &toR, &toC, &check) != 6) {
+            fclose(f); printf("Грешка: Повреден запис на ход %d!\n", i + 1); return false;
+        }
+        logMove(piece, fromR, fromC, toR, toC, check == 1);
+    }
+    fclose(f);
+    return true;
+}
+
 void startNewGame() {
     unsigned int seed = (unsigned int)time(NULL);
     srand(seed);
