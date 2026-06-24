@@ -248,6 +248,37 @@ bool loadGame(GameLog* log, const char* filename) {
     return true;
 }
 
+void applyMove(Move* m) {
+    char dest = board[m->toR][m->toC];
+    if (dest == 'R') rook1Alive = false;
+    if (dest == 'W') rook2Alive = false;
+    board[m->fromR][m->fromC] = ' ';
+    board[m->toR][m->toC] = m->piece;
+    if (m->piece == 'K') { playerKing.r = m->toR; playerKing.c = m->toC; }
+    else if (m->piece == 'R') { rook1.r = m->toR; rook1.c = m->toC; }
+    else if (m->piece == 'W') { rook2.r = m->toR; rook2.c = m->toC; }
+    else if (m->piece == 'k') { compKing.r = m->toR; compKing.c = m->toC; }
+}
+
+void replayGame(const char* filename) {
+    GameLog log;
+    log.moves = NULL;
+    if (!loadGame(&log, filename)) return;
+    boardSize = log.boardSize;
+    srand(log.seed);
+    generatePositions();
+    printf("\n--- REPLAY (Enter за следващ ход) ---\n");
+    printBoard();
+    for (int i = 0; i < log.count; i++) {
+        while (getchar() != '\n');
+        applyMove(&log.moves[i]);
+        printBoard();
+        if (log.moves[i].gaveCheck) printf("[ШАХ!]\n");
+    }
+    printf("--- КРАЙ НА REPLAY ---\n");
+    freeLog();
+}
+
 void startNewGame() {
     unsigned int seed = (unsigned int)time(NULL);
     srand(seed);
@@ -322,6 +353,7 @@ int main() {
         if (scanf("%d", &choice) != 1) { while (getchar() != '\n'); continue; }
         if (choice == 1) startNewGame();
         else if (choice == 2) changeBoardSize();
+        else if (choice == 3) replayGame("save.txt");
         else if (choice == 4) return 0;
     }
     return 0;
