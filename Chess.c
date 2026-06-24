@@ -180,6 +180,42 @@ void freeLog() {
     gameLog.capacity = 0;
 }
 
+void coordToStr(int r, int c, int bSize, char* out) {
+    out[0] = 'A' + c;
+    sprintf(out + 1, "%d", bSize - r);
+}
+
+void printStats(GameLog* log) {
+    printf("\n--- СТАТИСТИКА ---\n");
+    printf("Общ брой ходове: %d\n", log->count);
+
+    int countK = 0, countR = 0, countW = 0, countComp = 0, checks = 0;
+    for (int i = 0; i < log->count; i++) {
+        Move* m = &log->moves[i];
+        if      (m->piece == 'K') countK++;
+        else if (m->piece == 'R') countR++;
+        else if (m->piece == 'W') countW++;
+        else if (m->piece == 'k') countComp++;
+        if (m->gaveCheck) checks++;
+    }
+
+    printf("Ходове на K: %d\n", countK);
+    printf("Ходове на R: %d\n", countR);
+    printf("Ходове на W: %d\n", countW);
+    printf("Ходове на k (компютър): %d\n", countComp);
+    printf("Пъти компютърът в шах: %d\n", checks);
+
+    printf("\nХодове на играча:\n");
+    char from[8], to[8];
+    for (int i = 0; i < log->count; i++) {
+        Move* m = &log->moves[i];
+        if (m->piece == 'k') continue;
+        coordToStr(m->fromR, m->fromC, log->boardSize, from);
+        coordToStr(m->toR,   m->toC,   log->boardSize, to);
+        printf("  %c: %s -> %s%s\n", m->piece, from, to, m->gaveCheck ? " (ШАХ!)" : "");
+    }
+}
+
 void startNewGame() {
     unsigned int seed = (unsigned int)time(NULL);
     srand(seed);
@@ -227,13 +263,13 @@ void startNewGame() {
         bool compMoved = computerMakeMove();
         if (compMoved) logMove('k', compBefore.r, compBefore.c, compKing.r, compKing.c, false);
 
-        if (!rook1Alive && !rook2Alive) { printBoard(); printf("\nРАВЕНСТВО: Нямате достатъчно фигури за мат!\n"); freeLog(); break; }
+        if (!rook1Alive && !rook2Alive) { printBoard(); printf("\nРАВЕНСТВО: Нямате достатъчно фигури за мат!\n"); printStats(&gameLog); freeLog(); break; }
 
         if (!compMoved) {
             printBoard();
             if (isSquareAttackedByPlayer(compKing.r, compKing.c)) printf("\nПОБЕДА! ШАХ И МАТ!\n");
             else printf("\nПАТ! Равенство.\n");
-            freeLog(); break;
+            printStats(&gameLog); freeLog(); break;
         }
     }
 }
