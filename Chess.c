@@ -216,6 +216,17 @@ void printStats(GameLog* log) {
     }
 }
 
+void saveGame(GameLog* log, const char* filename) {
+    FILE* f = fopen(filename, "w");
+    if (!f) { printf("Грешка: Не може да се отвори %s за запис!\n", filename); return; }
+    fprintf(f, "%u\n%d\n%d\n", log->seed, log->boardSize, log->count);
+    for (int i = 0; i < log->count; i++) {
+        Move* m = &log->moves[i];
+        fprintf(f, "%c %d %d %d %d %d\n", m->piece, m->fromR, m->fromC, m->toR, m->toC, m->gaveCheck ? 1 : 0);
+    }
+    fclose(f);
+}
+
 void startNewGame() {
     unsigned int seed = (unsigned int)time(NULL);
     srand(seed);
@@ -263,13 +274,13 @@ void startNewGame() {
         bool compMoved = computerMakeMove();
         if (compMoved) logMove('k', compBefore.r, compBefore.c, compKing.r, compKing.c, false);
 
-        if (!rook1Alive && !rook2Alive) { printBoard(); printf("\nРАВЕНСТВО: Нямате достатъчно фигури за мат!\n"); printStats(&gameLog); freeLog(); break; }
+        if (!rook1Alive && !rook2Alive) { printBoard(); printf("\nРАВЕНСТВО: Нямате достатъчно фигури за мат!\n"); printStats(&gameLog); saveGame(&gameLog, "save.txt"); freeLog(); break; }
 
         if (!compMoved) {
             printBoard();
             if (isSquareAttackedByPlayer(compKing.r, compKing.c)) printf("\nПОБЕДА! ШАХ И МАТ!\n");
             else printf("\nПАТ! Равенство.\n");
-            printStats(&gameLog); freeLog(); break;
+            printStats(&gameLog); saveGame(&gameLog, "save.txt"); freeLog(); break;
         }
     }
 }
