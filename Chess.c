@@ -174,8 +174,10 @@ void logMove(char piece, int fromR, int fromC, int toR, int toC, bool gaveCheck)
 }
 
 void freeLog() {
-    free(gameLog.moves);
-    gameLog.moves = NULL;
+    if (gameLog.moves != NULL) {
+        free(gameLog.moves);
+        gameLog.moves = NULL;
+    }
     gameLog.count = 0;
     gameLog.capacity = 0;
 }
@@ -186,8 +188,8 @@ void coordToStr(int r, int c, int bSize, char* out) {
 }
 
 void printStats(GameLog* log) {
-    printf("\n--- СТАТИСТИКА ---\n");
-    printf("Общ брой ходове: %d\n", log->count);
+    printf("\n--- STATISTICS ---\n");
+    printf("Total moves: %d\n", log->count);
 
     int countK = 0, countR = 0, countW = 0, countComp = 0, checks = 0;
     for (int i = 0; i < log->count; i++) {
@@ -199,26 +201,26 @@ void printStats(GameLog* log) {
         if (m->gaveCheck) checks++;
     }
 
-    printf("Ходове на K: %d\n", countK);
-    printf("Ходове на R: %d\n", countR);
-    printf("Ходове на W: %d\n", countW);
-    printf("Ходове на k (компютър): %d\n", countComp);
-    printf("Пъти компютърът в шах: %d\n", checks);
+    printf("Moves by K: %d\n", countK);
+    printf("Moves by R: %d\n", countR);
+    printf("Moves by W: %d\n", countW);
+    printf("Moves by k (Computer): %d\n", countComp);
+    printf("Times computer was in check: %d\n", checks);
 
-    printf("\nХодове на играча:\n");
+    printf("\nPlayer Moves:\n");
     char from[8], to[8];
     for (int i = 0; i < log->count; i++) {
         Move* m = &log->moves[i];
         if (m->piece == 'k') continue;
         coordToStr(m->fromR, m->fromC, log->boardSize, from);
         coordToStr(m->toR,   m->toC,   log->boardSize, to);
-        printf("  %c: %s -> %s%s\n", m->piece, from, to, m->gaveCheck ? " (ШАХ!)" : "");
+        printf("  %c: %s -> %s%s\n", m->piece, from, to, m->gaveCheck ? " (CHECK!)" : "");
     }
 }
 
 void saveGame(GameLog* log, const char* filename) {
     FILE* f = fopen(filename, "w");
-    if (!f) { printf("Грешка: Не може да се отвори %s за запис!\n", filename); return; }
+    if (!f) { printf("Error: Cannot open %s for writing!\n", filename); return; }
     fprintf(f, "%u\n%d\n%d\n", log->seed, log->boardSize, log->count);
     for (int i = 0; i < log->count; i++) {
         Move* m = &log->moves[i];
@@ -229,20 +231,35 @@ void saveGame(GameLog* log, const char* filename) {
 
 bool loadGame(GameLog* log, const char* filename) {
     FILE* f = fopen(filename, "r");
-    if (!f) { printf("Грешка: Не може да се отвори %s!\n", filename); return false; }
+    if (!f) { printf("Error: Cannot open %s!\n", filename); return false; }
+    
     unsigned int seed; int bSize, count;
-    if (fscanf(f, "%u %d %d", &seed, &bSize, &count) != 3) { fclose(f); printf("Грешка: Повреден файл!\n"); return false; }
+    if (fscanf(f, "%u %d %d", &seed, &bSize, &count) != 3) { 
+        fclose(f); 
+        printf("Error: Corrupted file!\n"); 
+        return false; 
+    }
+    
     log->seed = seed;
     log->boardSize = bSize;
     log->count = 0;
     log->capacity = count > 0 ? count : 1;
     log->moves = malloc(log->capacity * sizeof(Move));
+    
     for (int i = 0; i < count; i++) {
         char piece; int fromR, fromC, toR, toC, check;
         if (fscanf(f, " %c %d %d %d %d %d", &piece, &fromR, &fromC, &toR, &toC, &check) != 6) {
-            fclose(f); printf("Грешка: Повреден запис на ход %d!\n", i + 1); return false;
+            fclose(f); 
+            printf("Error: Corrupted log entry at move %d!\n", i + 1); 
+            return false;
         }
-        logMove(piece, fromR, fromC, toR, toC, check == 1);
+        
+        if (log->count == log->capacity) {
+            log->capacity *= 2;
+            log->moves = realloc(log->moves, log->capacity * sizeof(Move));
+        }
+        Move m = { piece, fromR, fromC, toR, toC, check == 1 };
+        log->moves[log->count++] = m;
     }
     fclose(f);
     return true;
@@ -264,19 +281,28 @@ void replayGame(const char* filename) {
     GameLog log;
     log.moves = NULL;
     if (!loadGame(&log, filename)) return;
+    
     boardSize = log.boardSize;
     srand(log.seed);
     generatePositions();
-    printf("\n--- REPLAY (Enter за следващ ход) ---\n");
+    
+    printf("\n--- REPLAY (Press Enter for next move) ---\n");
     printBoard();
+
+    int ch;
+    while ((ch = getchar()) != '\n' && ch != EOF); 
+
     for (int i = 0; i < log.count; i++) {
-        while (getchar() != '\n');
+        printf("\n[Press Enter to see move %d/%d...]", i + 1, log.count);
+        while (getchar() != '\n'); 
+        
         applyMove(&log.moves[i]);
         printBoard();
-        if (log.moves[i].gaveCheck) printf("[ШАХ!]\n");
+        if (log.moves[i].gaveCheck) printf("[CHECK!]\n");
     }
-    printf("--- КРАЙ НА REPLAY ---\n");
-    freeLog();
+    
+    printf("\n--- END OF REPLAY ---\n");
+    free(log.moves);
 }
 
 void startNewGame() {
@@ -284,35 +310,35 @@ void startNewGame() {
     srand(seed);
     generatePositions();
     initLog(seed);
-    printf("\n--- ИГРАТА ЗАПОЧНА ---\n");
+    printf("\n--- GAME STARTED ---\n");
     while (1) {
         printBoard();
-        if (isSquareAttackedByPlayer(compKing.r, compKing.c)) printf("\n[ВНИМАНИЕ] Компютърът е в ШАХ!\n");
+        if (isSquareAttackedByPlayer(compKing.r, compKing.c)) printf("\n[WARNING] The computer is in CHECK!\n");
 
-        printf("\nВъведете вашия ход (например: A2 A4): ");
+        printf("\nEnter your move (e.g., A2 A4): ");
         char col1, col2; int row1, row2;
         if (scanf(" %c%d %c%d", &col1, &row1, &col2, &row2) != 4) {
-            printf("Грешка: Невалиден формат!\n"); while (getchar() != '\n'); continue;
+            printf("Error: Invalid input format!\n"); while (getchar() != '\n'); continue;
         }
         int fromC = col1 - (col1 >= 'a' ? 'a' : 'A'); int fromR = boardSize - row1;
         int toC = col2 - (col2 >= 'a' ? 'a' : 'A'); int toR = boardSize - row2;
 
-        if (!inBounds(fromR, fromC) || !inBounds(toR, toC)) { printf("Грешка: Извън дъската!\n"); continue; }
+        if (!inBounds(fromR, fromC) || !inBounds(toR, toC)) { printf("Error: Coordinates out of bounds!\n"); continue; }
         char piece = board[fromR][fromC];
-        if (piece != 'K' && piece != 'R' && piece != 'W') { printf("Грешка: Няма ваша фигура там!\n"); continue; }
-        if (board[toR][toC] == 'K' || board[toR][toC] == 'R' || board[toR][toC] == 'W') { printf("Грешка: Не може върху своя фигура!\n"); continue; }
+        if (piece != 'K' && piece != 'R' && piece != 'W') { printf("Error: There is no piece belonging to you at that square!\n"); continue; }
+        if (board[toR][toC] == 'K' || board[toR][toC] == 'R' || board[toR][toC] == 'W') { printf("Error: You cannot capture your own piece!\n"); continue; }
 
         bool validMove = false;
         if (piece == 'K') { 
             if (abs(toR - fromR) <= 1 && abs(toC - fromC) <= 1) {
                 if (abs(toR - compKing.r) > 1 || abs(toC - compKing.c) > 1) validMove = true;
-                else printf("Грешка: Царете не могат да бъдат един до друг!\n");
+                else printf("Error: Kings cannot stand on adjacent squares!\n");
             }
         } else { 
             if (isRookPathClear(fromR, fromC, toR, toC)) validMove = true; 
         }
 
-        if (!validMove) { printf("Грешка: Невалиден шахматен ход!\n"); continue; }
+        if (!validMove) { printf("Error: Invalid chess move!\n"); continue; }
 
         board[fromR][fromC] = ' '; board[toR][toC] = piece;
         if (piece == 'K') { playerKing.r = toR; playerKing.c = toC; }
@@ -326,12 +352,16 @@ void startNewGame() {
         bool compMoved = computerMakeMove();
         if (compMoved) logMove('k', compBefore.r, compBefore.c, compKing.r, compKing.c, false);
 
-        if (!rook1Alive && !rook2Alive) { printBoard(); printf("\nРАВЕНСТВО: Нямате достатъчно фигури за мат!\n"); printStats(&gameLog); saveGame(&gameLog, "save.txt"); freeLog(); break; }
+        if (!rook1Alive && !rook2Alive) { 
+            printBoard(); 
+            printf("\nDRAW: Insufficient mating material left!\n"); 
+            printStats(&gameLog); saveGame(&gameLog, "save.txt"); freeLog(); break; 
+        }
 
         if (!compMoved) {
             printBoard();
-            if (isSquareAttackedByPlayer(compKing.r, compKing.c)) printf("\nПОБЕДА! ШАХ И МАТ!\n");
-            else printf("\nПАТ! Равенство.\n");
+            if (isSquareAttackedByPlayer(compKing.r, compKing.c)) printf("\nVICTORY! CHECKMATE!\n");
+            else printf("\nSTALEMATE! The game is a draw.\n");
             printStats(&gameLog); saveGame(&gameLog, "save.txt"); freeLog(); break;
         }
     }
@@ -339,17 +369,17 @@ void startNewGame() {
 
 void changeBoardSize() {
     int newSize;
-    printf("\nВъведете нов размер (4-%d): ", MAX_SIZE);
+    printf("\nEnter new size (4-%d): ", MAX_SIZE);
     if (scanf("%d", &newSize) == 1 && newSize >= 4 && newSize <= MAX_SIZE) {
         boardSize = newSize;
-        printf("Успешно променен на %dx%d!\n", boardSize, boardSize);
+        printf("Board size successfully updated to %dx%d!\n", boardSize, boardSize);
     }
 }
 
 int main() {
     int choice;
     while (1) {
-        printf("\n=== МЕНЮ ===\n1. Нова игра\n2. Размер дъска (Сега: %dx%d)\n3. Replay\n4. Изход\nИзбор: ", boardSize, boardSize);
+        printf("\n=== MENU ===\n1. New Game\n2. Board Size (Current: %dx%d)\n3. Replay\n4. Exit\nChoice: ", boardSize, boardSize);
         if (scanf("%d", &choice) != 1) { while (getchar() != '\n'); continue; }
         if (choice == 1) startNewGame();
         else if (choice == 2) changeBoardSize();
